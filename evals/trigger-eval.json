@@ -11,6 +11,8 @@
   {"query": "我想知道 ResNet 之后有哪些改进它的工作，按时间线给我一个谱系", "should_trigger": true},
   {"query": "帮我核验一下我 references.bib 里这 60 条引用是不是都真实存在、有没有编造或张冠李戴的", "should_trigger": true},
   {"query": "审稿人说我有几条引用查不到，帮我把 .tex 里 \\bibitem 列表逐条去数据库核对", "should_trigger": true},
+  {"query": "我想搞扩散模型，但说实话还不知道具体做哪个方向，能帮我理理这领域有哪些细分、我好挑一个吗", "should_trigger": true},
+  {"query": "我刚入门图神经网络，这领域太大了，有哪些值得做的小方向？我连那些子方向叫什么名字都说不全", "should_trigger": true},
   {"query": "找几篇支撑‘注意力机制提升性能’这个说法的文献，分段给我引用插进段落", "should_trigger": false},
   {"query": "把我这段 related work 草稿润色成地道的学术英文", "should_trigger": false},
   {"query": "帮我把这篇 PDF 翻译成中英对照", "should_trigger": false},
@@ -20,5 +22,6 @@
   {"query": "search the web for the latest news about the stock market today", "should_trigger": false},
   {"query": "帮我审查一下这段 python 代码有没有 bug", "should_trigger": false},
   {"query": "帮我把这些参考文献从 .ris 转成 bibtex", "should_trigger": false},
-  {"query": "给这段方法描述逐句配上 Nature 子刊的支撑引用并导出 EndNote", "should_trigger": false}
+  {"query": "给这段方法描述逐句配上 Nature 子刊的支撑引用并导出 EndNote", "should_trigger": false},
+  {"query": "我想了解一下个人理财有哪些方向，新手该从哪入手", "should_trigger": false}
 ]
