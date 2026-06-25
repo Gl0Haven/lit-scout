@@ -8,7 +8,7 @@
 | OpenAlex | 引用图、机构/作者、引用数 | `https://api.openalex.org/works` | **已接入 verify_citations.py**(标题兜底核验)；也供 citation_graph_agent |
 | Semantic Scholar | 前后向引用、TLDR、广覆盖 | Graph API | **已接入 verify**；无 key 限流严, 失败即跳过 |
 | DBLP | CS/IEEE/ACM 书目(计算机/工程命中率最高) | `dblp.org/search/publ/api` | **已接入 verify**；免 key、稳 |
-| consensus | 主张级证据检索 | 已连 MCP | 用其返回的真实论文，遵守其引用格式要求 |
+| consensus | 主张级证据检索 | 可选 MCP（连了才用） | 环境相关：未连接则自动跳过、不影响其余源；用其返回的真实论文，遵守其引用格式要求 |
 | **GitHub** | **论文级代码/复现仓库** | GitHub 搜索 API `api.github.com/search/repositories` 或 WebSearch | 见下"论文级代码检索" |
 | Papers with Code | 论文↔代码↔SOTA 榜 | WebFetch/WebSearch | 补充代码与 benchmark 链接 |
 | WebFetch/WebSearch | 落地页/PDF/补漏 | 内置 | 仅作补充，仍须过验证门 |

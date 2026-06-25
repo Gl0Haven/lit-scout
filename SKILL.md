@@ -47,7 +47,7 @@ description: >-
 
 ## 共享底座
 
-**检索源**（见 `references/sources.md`）：arXiv（ML 主战场）+ CrossRef + OpenAlex/Semantic Scholar（引用图）+ **GitHub（论文级代码/复现仓库检索）** + consensus + 必要时 WebFetch 落地页/PDF。多角度互盲扫，避免单一检索漏网。
+**检索源**（见 `references/sources.md`）：arXiv（ML 主战场）+ CrossRef + OpenAlex/Semantic Scholar（引用图）+ **GitHub（论文级代码/复现仓库检索）** + consensus（若已连该 MCP；未连则自动跳过、不影响其余源）+ 必要时 WebFetch 落地页/PDF。多角度互盲扫，避免单一检索漏网。
 
 **Agent 编排**（prompt 在 `agents/`，用到才加载；可复用）：
 - `scout_agent` — 多角度检索，返回候选论文（只来自工具返回）
@@ -78,7 +78,7 @@ build_outputs.py --verdict verdict.json --out <dir> \
 生成 `corpus.json`(canonical 记录) → 由它统一派生 `report.md`、`verified.bib`、`verified.ris`(Zotero/EndNote)、`needs-review.md`、`rejected.md`、`obsidian/`。身份(id/title/year)取自验证门，富化只补不覆盖；摘要按 OpenAlex→CrossRef→arXiv 兜底抓取(缺则标"摘要不可得")；citekey 转 ASCII、作者 ` and ` 分隔、空档也生成空态文件。输入侧 taxonomy/sota/seeds/code/overrides 缺省时报告明示"未提供"，不降级。`--overrides` 按 slug→doi→arxiv→id 命中，`bibtype` 只改导出类型不动源 `work_type`。
 **论文总结**：由 agent(extractor/positioning) **基于抓取到的真实摘要/全文**逐篇写总结，存 `summaries.json`(slug→中文总结)，经 `--summaries` 注入 report 的"论文总结"段；摘要不可得的篇目须如实标注、不编造。
 **交付前必跑校验门**：`scripts/check_outputs.py --verdict verdict.json --out <dir> [--mode landscape|positioning|seed|tracking]`，校验三档计数一致、year 无漂移、citekey ASCII、标题不截断、引用边不冒充谱系、撤稿已显式告警、trust 字段齐备等；`--mode` 额外校验该模式招牌产物（landscape 查 Taxonomy/SOTA/种子；positioning 查定位章节+slug 属 confirmed；seed 查同心圆；tracking 查 digest）；非 0 退出即不得交付。
-**输出人设（去 AI 味）**（见 `references/voice.md`）：报告里的散文（总结/gap/定位/流派思路/Related Work）由 agent 写，统一走"同领域资深同门"人设 + 两种语域（**笔记体**默认进 report.md；**投稿体**可选进 `survey-draft.md`，能直接粘进综述/论文，只引 verified.bib 的 citekey）。写散文前 agent 先读 voice.md；风格只改"怎么说"，事实仍守 0 幻觉。`scripts/check_voice.py` 扫 AI 套话（WARN）并硬校验 survey 草稿的 `\cite` 必须命中 verified.bib（未核引用即 FAIL）；check_outputs 末尾自动调它。
+**输出人设（去 AI 味）**（见 `references/voice.md`）：报告里的散文（总结/gap/定位/流派思路/Related Work）由 agent 写，统一走"同领域资深同门"人设 + 两种语域（**笔记体**默认进 report.md；**投稿体**可选进 `survey-draft.md`，能直接粘进综述/论文，只引 verified.bib 的 citekey）。写散文前 agent 先读 voice.md；风格只改"怎么说"，事实仍守 0 幻觉。`scripts/check_voice.py` 扫 AI 套话（WARN）并硬校验 survey 草稿的行内引用（`\cite{}` 或 `[citekey]` 两种格式，跳过代码块内的格式说明）必须命中 verified.bib（未核引用即 FAIL）；check_outputs 末尾自动调它。
 
 **OS 针对性输出**（见 `references/output-templates.md`）：写文件前判定 OS；**Windows 强制 UTF-8（无 BOM）、脚本用 `python` 且 stdin/stdout reconfigure utf-8**，绝不依赖系统默认编码（否则中文/管道写坏）。
 

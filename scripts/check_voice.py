@@ -69,11 +69,19 @@ def bib_citekeys(bib_text):
     return {k.strip().lower() for k in re.findall(r"^@\w+\{([^,]+),", bib_text, re.M)}
 
 
+def _strip_code(text):
+    """去掉围栏代码块与行内 code, 避免把说明性占位(如 `\\cite{key}`)当成真引用。"""
+    text = re.sub(r"```.*?```", " ", text, flags=re.S)
+    return re.sub(r"`[^`\n]*`", " ", text)
+
+
 def extract_cites(survey_text):
     """抽行内引用 key(小写)。支持两种格式:
       - LaTeX: \\cite/\\citep/\\citet{a,b}
       - lit-scout 默认: [citekey] (含 4 位年份, 排除 markdown 链接 [x](...) 和无年份的普通方括号)
-    含年份这一条同时滤掉了 [citekey] 这种字面占位词与 [1] 这种数字引用。"""
+    含年份这一条同时滤掉了 [citekey] 这种字面占位词与 [1] 这种数字引用;
+    代码块/行内 code 内的引用一律跳过(那是格式说明, 不是真引用)。"""
+    survey_text = _strip_code(survey_text)
     keys = []
     for m in re.finditer(r"\\cite[tp]?\*?(?:\[[^\]]*\])*\{([^}]+)\}", survey_text):
         keys += [k.strip().lower() for k in m.group(1).split(",") if k.strip()]

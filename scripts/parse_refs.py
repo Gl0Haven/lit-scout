@@ -118,14 +118,16 @@ def parse_ris(text):
 
 
 def parse_tex_or_text(text):
-    """兜底: 每条 \\bibitem 或每行一条; 抽 DOI/arXiv, 标题尽力而为(可能 partial)。"""
+    """兜底: 每条 \\bibitem 或每行一条; 抽 DOI/arXiv, 标题尽力而为(可能 partial)。
+    显式 \\bibitem 一律视为引用; 行分割兜底时, 只对"像引用"的行(含年份/DOI/arXiv/带引号标题)
+    生成候选, 避免把普通散文行当成伪引用塞进管道。"""
     out = []
     items = re.split(r"\\bibitem(?:\[[^\]]*\])?\{[^}]*\}", text)
     if len(items) > 1:
-        chunks = items[1:]
+        chunks = [(c, True) for c in items[1:]]        # 显式 bibitem: 一定是引用
     else:
-        chunks = [ln for ln in text.splitlines() if len(ln.strip()) > 20]
-    for ch in chunks:
+        chunks = [(ln, False) for ln in text.splitlines() if len(ln.strip()) > 20]
+    for ch, is_bibitem in chunks:
         ch = ch.strip()
         if not ch:
             continue
@@ -136,8 +138,11 @@ def parse_tex_or_text(text):
         am = ARXIV_RE.search(ch) or (ARXIV_OLD_RE.search(ch) if "arxiv" in ch.lower() else None)
         if am:
             rec["arxiv"] = am.group(1)
-        # 标题启发: 引号内, 或第一个较长句段
-        qm = re.search(r'[“"“]([^”"”]{8,})[”"”]', ch)
+        qm = re.search(r'[“"“]([^”"”]{8,})[”"”]', ch)   # 引号内标题
+        has_year = re.search(r"\b(19|20)\d{2}\b", ch)
+        # 行分割兜底: 不像引用(无年份/DOI/arXiv/引号标题)的行直接跳过
+        if not (is_bibitem or dm or am or qm or has_year):
+            continue
         if qm:
             rec["title"] = _clean(qm.group(1))
         else:
