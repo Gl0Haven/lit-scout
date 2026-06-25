@@ -1,0 +1,13 @@
+# 模式③ 持续追踪的监视清单示例。复制到 lit-scout-out/<name>/watchlist.yaml 后编辑。
+name: my-topic
+topics:
+  - "diffusion model image super-resolution"
+  - "latent diffusion image restoration"
+  - "implicit neural representation"
+authors: []                 # 可填要盯的作者, 留空则只按 topics
+venues:
+  - "CVPR"
+  - "arXiv cs.CV"
+  - "arXiv eess.IV"
+last_checked: 2026-06-15     # 每次成功跑完后更新为当天; 首次设为开始追踪的日期
+min_relevance: 0.6          # 低于此分进 skipped(保留可回看)

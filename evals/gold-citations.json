@@ -1,0 +1,21 @@
+{
+  "_doc": "验证门(verify_citations.py)回归 gold set。label=real 的应落 confirmed(或最差 review, 绝不 rejected); label=fake 的必须 rejected(绝不 confirmed)。不变量: confirmed 中 0 个 fake, rejected 中 0 个 real。fake 条目为合成的、看似合理但不存在的标题, 不指向任何真实作者作品。",
+  "real": [
+    {"title": "Attention Is All You Need", "year": 2017, "arxiv": "1706.03762"},
+    {"title": "Deep Residual Learning for Image Recognition", "year": 2016, "doi": "10.1109/CVPR.2016.90"},
+    {"title": "An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale", "year": 2020, "arxiv": "2010.11929"},
+    {"title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding", "year": 2019, "doi": "10.18653/v1/N19-1423"},
+    {"title": "Generative Adversarial Networks", "year": 2014, "arxiv": "1406.2661"},
+    {"title": "Adam: A Method for Stochastic Optimization", "year": 2015, "arxiv": "1412.6980"},
+    {"title": "U-Net: Convolutional Networks for Biomedical Image Segmentation", "year": 2015, "arxiv": "1505.04597"},
+    {"title": "Denoising Diffusion Probabilistic Models", "year": 2020, "arxiv": "2006.11239"},
+    {"title": "Segment Anything", "year": 2023, "arxiv": "2304.02643"}
+  ],
+  "fake": [
+    {"title": "Quantum Holographic Transformers for Telepathic Image Synthesis", "year": 2023},
+    {"title": "Self-Supervised Chrono-Diffusion Networks for Retrocausal Video Prediction", "year": 2022},
+    {"title": "HyperGraph Capsule Manifolds for Zero-Shot Olfactory Recognition", "year": 2021},
+    {"title": "Federated Spiking Wavelet Attention for Subdermal Biometric Forgery Detection", "year": 2024},
+    {"title": "Neural Tensor Origami: Foldable Latent Spaces for Tactile Style Transfer", "year": 2020}
+  ]
+}

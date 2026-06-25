@@ -1,0 +1,16 @@
+# Python 字节码（.pyc 会嵌入编译机的绝对源码路径，勿提交）
+__pycache__/
+*.pyc
+
+# lit-scout 运行产物（含你的真实调研数据/语料/引用，勿开源）
+lit-scout-out/
+*/corpus.json
+verdict*.json
+candidates*.json
+*-workspace/
+
+# 临时/缓存
+_*.json
+_*.txt
+*.tmp
+.cache/

@@ -1,0 +1,5 @@
+# lit-scout — 脚本仅用 Python 标准库即可运行(urllib/json/difflib/sqlite3)。
+# 以下为可选增强, 强烈建议安装以避免精简环境下的 HTTPS 证书问题:
+truststore>=0.8   ; python_version >= "3.10"   # 用系统证书库, 首选
+certifi>=2024.2                                  # truststore 不可用时的 CA 兜底
+# 无需任何 API key: OpenAlex/CrossRef/DBLP/arXiv 免 key; Semantic Scholar 无 key 时限流即跳过。
