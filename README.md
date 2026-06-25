@@ -13,6 +13,10 @@
 | ④ 种子扩展 | 沿一篇论文的前后向引用滚雪球 | `references/seed-expansion.md` |
 | ⑤ 稿件引文核验 | 核验现成 .bib/.ris/.tex 引用是否真实/对得上（验证门直接应用，不插引用） | `references/citation-check.md` |
 
+**接需求（进门）**：见 `references/intake.md`。能从话里认出模式就不空问；**用户给模糊领域、没具体方向时，先轻量侦察该领域、把真实子方向摆成带名字+一句话解释的菜单让用户挑、逐级收敛**（兼顾"想广扫整个领域"与"不知道子领域叫啥名"两种），收敛后再路由到模式。
+
+**检索覆盖（不偏科）**：`scout_agent` 两路并取——按时间分段（奠基/里程碑/近期 SOTA）+ 按引用中心度（OpenAlex cited_by 降序抓高被引核心，无论年份）；`completeness_critic` 再查"时间是否畸偏 / 核心文是否齐"。目标是覆盖领域核心，而非只调研老文章或只调研新文章。
+
 ## 0 幻觉机制（三档验证门）
 `scripts/verify_citations.py` 调 **CrossRef + arXiv + OpenAlex + DBLP + Semantic Scholar** 五源逐条核验，输出：
 - **confirmed**：id 解析 + 标题/年份吻合 → 进产物
@@ -34,7 +38,7 @@ python scripts/verify_citations.py --in cand.json --threshold 0.92 --sleep 0.5 >
 ```
 
 ## 产物
-默认落 `lit-scout-out/<topic>/`：`report.md`、`verified.bib`/`verified.ris`（仅 confirmed，带真实 DOI + 代码链接）、`needs-review.md`、`rejected.md`、`obsidian/`。Obsidian 用 `cites::`/`cited-by::` wikilink 渲染**集合内引用图**(有原文 evidence 才升级 `improves::` 方法谱系)，MOC 按 taxonomy 分组；见 `references/export-zotero-obsidian.md`。
+默认落 `lit-scout-out/<topic>/`：`report.md`、`verified.bib`/`verified.ris`（仅 confirmed，带真实 DOI + 代码链接）、`needs-review.md`、`rejected.md`、`obsidian/`；可选 `search-strategy.md`（检索可复现报告，`--search-log`）与 `survey-draft.md`（投稿体综述草稿，survey_writer_agent 产，只引 verified.bib）。Obsidian 用 `cites::`/`cited-by::` wikilink 渲染**集合内引用图**(有原文 evidence 才升级 `improves::` 方法谱系)，MOC 按 taxonomy 分组；见 `references/export-zotero-obsidian.md`。
 
 ## 目录
 ```
@@ -61,15 +65,21 @@ lit-scout/
 
 可信度层(Trust)：confirmed 只代表"真实存在"，build_outputs 另算 **撤稿/评审层(preprint/conference/journal)/引用热度/版本状态**，report 出「可信度告警」，撤稿条目禁作 baseline。**存在性 ≠ 可信度**。
 
-输出人设(去 AI 味)：报告散文走"同领域资深同门"人设，两种语域——**笔记体**(默认 report.md，给自己看)与**投稿体**(可选 `survey-draft.md`，能直接进综述/论文，只引 verified.bib)。规范见 `references/voice.md`；`check_voice.py` 扫 AI 套话(WARN) + 硬校验 survey 的 `\cite` 必须命中 verified.bib。
+输出人设(去 AI 味)：报告散文走"同领域资深同门"人设（与进门 `intake.md` 同一人设），两种语域——**笔记体**(默认 report.md，给自己看)与**投稿体**(可选 `survey-draft.md`，能直接进综述/论文，只引 verified.bib)。规范见 `references/voice.md`；`check_voice.py` 扫 AI 套话(WARN) + 硬校验 survey 行内引用(`\cite{}` 或 `[citekey]`，跳过代码块内的格式说明)必须命中 verified.bib。
 
 ## 端到端数据流（杜绝漂移）
 ```
-candidates → verify_citations.py → verdict.json(confirmed/review/rejected)
-  agent 产出可选输入: summaries.json(总结) · code_repos.json(代码) · taxonomy.json · sota.json · seeds.json · manual_overrides.json
-          → build_outputs.py [--summaries --code-repos --taxonomy --sota --seeds --overrides]
-              → corpus.json(canonical) → report.md / verified.bib / verified.ris / obsidian/ / needs-review.md / rejected.md
-          → check_outputs.py [--mode landscape] (必须 ALL PASS 才交付; landscape 额外查 Taxonomy/SOTA/种子三章与 schema)
+candidates → dedup.py(去重: DOI主键+标题作者兜底+预印本↔出版归并)
+          → verify_citations.py(五源核验, 带持久缓存) → verdict.json(confirmed/review/rejected)
+  agent 产出可选输入: summaries · code_repos · taxonomy · sota · seeds · manual_overrides
+                      · search_log(检索可复现) · positioning(模式①) · circles(模式④)
+          → build_outputs.py [--summaries --code-repos --taxonomy --sota --seeds --overrides
+                              --search-log --positioning --circles --merge-corpus]
+              → corpus.json(canonical, 含 trust 可信度层)
+                → report.md / verified.bib / verified.ris / obsidian/ / needs-review.md / rejected.md
+                  / search-strategy.md(可选) ; survey_writer_agent 另出 survey-draft.md(可选)
+          → check_outputs.py [--mode landscape|positioning|seed|tracking] (必须 ALL PASS 才交付)
+          → check_voice.py (去 AI 味 WARN + survey 引用硬校验; check_outputs 末尾自动调)
 ```
 身份(id/title/year)以 verdict 为权威，富化只补不覆盖；引用边诚实标 `cites`（方法谱系须每边带原文 evidence）；`--overrides` 仅改导出类型不伪造源 type。
 
