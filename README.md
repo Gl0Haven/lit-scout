@@ -26,9 +26,11 @@
 不变量：**最终产物 0 编造引用** 且 **0 真论文被静默丢弃**。
 
 ## 依赖与环境
-- Python 3.8+，仅标准库即可运行；建议 `pip install truststore certifi`（HTTPS 证书，避免精简环境 arXiv 报 CERTIFICATE_VERIFY_FAILED）。
+- Python 3.8+，**核心脚本仅标准库即可运行**；建议 `pip install truststore certifi`（HTTPS 证书，避免精简环境 arXiv 报 CERTIFICATE_VERIFY_FAILED）。
 - 部分 Windows 上 `python3` 是商店占位别名 → 用 `python` 或绝对路径。
-- 验证脚本无需任何 API key（OpenAlex/CrossRef/DBLP/arXiv 免 key；S2 无 key 时限流即跳过）。
+- **无需任何 API key**（OpenAlex/CrossRef/DBLP/arXiv 免 key；S2 无 key 时限流即跳过）。可选设 `SEMANTIC_SCHOLAR_API_KEY`/`OPENALEX_EMAIL` 提速提配额。
+- 批量核验/检索前可先 `python scripts/preflight.py` 自检源连通性 + key 状态。
+- **PDF 全文抽取（可选）** 另需依赖，装进专用 venv，核心不受影响：`python -m venv .venv && .venv/Scripts/python -m pip install -r requirements-pdf.txt`，用该 venv 的 python 跑 `fetch_fulltext.py`；未装则自动回退摘要。
 
 ## 验证门用法
 ```bash
@@ -75,14 +77,17 @@ lit-scout/
 
 ## 端到端数据流（杜绝漂移）
 ```
+(可选先 preflight.py 自检源连通性)
 candidates → dedup.py(去重: DOI主键+标题作者兜底+预印本↔出版归并)
-          → verify_citations.py(五源核验, 带持久缓存) → verdict.json(confirmed/review/rejected)
+          → verify_citations.py(五源核验 + 持久缓存 + 跨索引三角验证) → verdict.json(confirmed/review/rejected)
+  可选深度: fetch_fulltext.py(抓OA全文) → check_claims.py(claim证据定位) → faithfulness_agent 撤下不实断言
   agent 产出可选输入: summaries · code_repos · taxonomy · sota · seeds · manual_overrides
                       · search_log(检索可复现) · positioning(模式①) · circles(模式④)
           → build_outputs.py [--summaries --code-repos --taxonomy --sota --seeds --overrides
                               --search-log --positioning --circles --merge-corpus]
               → corpus.json(canonical, 含 trust 可信度层)
-                → report.md / verified.bib / verified.ris / obsidian/ / needs-review.md / rejected.md
+                → report.md / verified.bib / verified.ris / verified.csl.json / verified.enw
+                  / obsidian/ / needs-review.md / rejected.md
                   / search-strategy.md(可选) ; survey_writer_agent 另出 survey-draft.md(可选)
           → check_outputs.py [--mode landscape|positioning|seed|tracking] (必须 ALL PASS 才交付)
           → check_voice.py (去 AI 味 WARN + survey 引用硬校验; check_outputs 末尾自动调)
