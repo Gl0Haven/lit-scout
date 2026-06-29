@@ -34,8 +34,8 @@ def main():
     O = a.out
 
     # 1) 必需文件存在
-    req = ["corpus.json", "report.md", "verified.bib", "verified.ris", "needs-review.md", "rejected.md",
-           os.path.join("obsidian", "_MOC.md")]
+    req = ["corpus.json", "report.md", "verified.bib", "verified.ris", "verified.csl.json", "verified.enw",
+           "needs-review.md", "rejected.md", os.path.join("obsidian", "_MOC.md")]
     for f in req:
         ck(f"file:{f}", os.path.exists(os.path.join(O, f)))
 
@@ -54,6 +54,14 @@ def main():
     ck("count:corpus==confirmed", len(papers) == n, f"{len(papers)} vs {n}")
     ck("count:bib==confirmed", len(bib_entries) == n, f"{len(bib_entries)} vs {n}")
     ck("count:obsidian==confirmed", len(notes) == n, f"{len(notes)} vs {n}")
+    # csl/enw 同样从 canonical 派生, 计数须一致(杜绝某个导出漏条)
+    try:
+        csl_n = len(json.loads(open(os.path.join(O, "verified.csl.json"), encoding="utf-8").read()))
+        ck("count:csl==confirmed", csl_n == n, f"{csl_n} vs {n}")
+    except Exception as e:
+        ck("count:csl==confirmed", False, f"读 csl 失败: {e}")
+    enw_n = open(os.path.join(O, "verified.enw"), encoding="utf-8").read().count("%0 ")
+    ck("count:enw==confirmed", enw_n == n, f"{enw_n} vs {n}")
 
     # 3) citekey 全 ASCII
     nonascii = [k for k in bib_entries if not k.isascii()]

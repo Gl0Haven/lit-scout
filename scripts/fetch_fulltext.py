@@ -20,7 +20,7 @@ PDF 来源解析顺序：arXiv id → arXiv PDF；否则 OpenAlex(open_access.oa
 输出：fulltext/<slug>.md（全文 markdown）+ stdout 一份 manifest JSON
   {slug:{ok, chars, source_url, method, error?}}。整合进 build_outputs 的 summaries 由 agent 完成。
 """
-import sys, os, json, re, argparse, ssl, urllib.parse, urllib.request
+import sys, os, json, re, time, argparse, ssl, urllib.parse, urllib.request
 
 UA = {"User-Agent": "lit-scout-fulltext/0.1 (academic use)"}
 TIMEOUT = 60
@@ -66,10 +66,19 @@ def _check_libs():
     return backends
 
 
-def _get_bytes(url):
-    req = urllib.request.Request(url, headers=UA)
-    with urllib.request.urlopen(req, timeout=TIMEOUT, context=CTX) as r:
-        return r.read()
+def _get_bytes(url, retries=2):
+    """带重试: 本机/精简环境 HTTPS 偶发 SSL EOF, 重试能救回, 免得把网络抖动当成'无全文'。"""
+    last = None
+    for attempt in range(retries + 1):
+        try:
+            req = urllib.request.Request(url, headers=UA)
+            with urllib.request.urlopen(req, timeout=TIMEOUT, context=CTX) as r:
+                return r.read()
+        except Exception as e:
+            last = e
+            if attempt < retries:
+                time.sleep(2)
+    raise last
 
 
 def _get_json(url):
@@ -85,6 +94,7 @@ def resolve_pdf_url(rec, email=None):
     doi = (rec.get("doi") or rec.get("resolved_doi") or "").strip().replace("https://doi.org/", "")
     title = rec.get("title") or rec.get("match_title")
     # OpenAlex: 按 doi 或标题找开放获取 url
+    query_failed = False
     try:
         if doi:
             w = _get_json("https://api.openalex.org/works/doi:" + urllib.parse.quote(doi))
@@ -95,15 +105,15 @@ def resolve_pdf_url(rec, email=None):
         else:
             w = None
         if w:
-            oa = w.get("open_access") or {}
             loc = w.get("best_oa_location") or {}
-            url = oa.get("oa_url") or loc.get("pdf_url") or (loc.get("landing_page_url") if loc.get("pdf_url") else None)
-            if url and url.lower().endswith(".pdf"):
+            oa = w.get("open_access") or {}
+            # 优先显式 pdf_url, 再 oa_url(可能是落地页); 不按 .pdf 后缀过滤——
+            # 很多 OA PDF 链接没有 .pdf 后缀, 真伪交给下载后的 %PDF 魔数判定。
+            url = loc.get("pdf_url") or oa.get("oa_url")
+            if url:
                 return url, "openalex-oa"
-            if loc.get("pdf_url"):
-                return loc["pdf_url"], "openalex-oa"
-    except Exception as e:
-        pass
+    except Exception:
+        query_failed = True   # 网络/限流失败 ≠ 无 OA, 分开报, 提示可重试
     # Unpaywall 兜底(需 email)
     if doi and email:
         try:
@@ -112,7 +122,9 @@ def resolve_pdf_url(rec, email=None):
             if loc.get("url_for_pdf"):
                 return loc["url_for_pdf"], "unpaywall"
         except Exception:
-            pass
+            query_failed = True
+    if query_failed:
+        return None, "OA 查询失败(网络/限流, 已重试); 建议稍后重跑, 勿当作无全文"
     return None, "无开放获取 PDF(可能付费墙); 回退摘要"
 
 
