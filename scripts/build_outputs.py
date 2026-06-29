@@ -192,11 +192,23 @@ def compute_trust(p, w):
             velocity = round(int(cited) / age, 1)
         except (TypeError, ValueError):
             velocity = None
+    # 期刊质量软信号(融合自 ARS 掠夺性筛查, 保守、不下"掠夺"定性以免误伤):
+    # 仅当是 journal 且 OpenAlex 源既不在 DOAJ、又无 ISSN、且零被引时, 标"venue 元数据稀薄, 留意"。
+    src = ((w or {}).get("primary_location") or {}).get("source") or {}
+    venue_quality = None
+    if venue_type == "journal" and w:
+        in_doaj = bool(src.get("is_in_doaj"))
+        has_issn = bool(src.get("issn") or src.get("issn_l"))
+        if not in_doaj and not has_issn and (cited or 0) == 0:
+            venue_quality = "thin"   # 元数据稀薄, 报告里软提示, 非"掠夺"指控
+        elif in_doaj or has_issn:
+            venue_quality = "indexed"
     return {
         "is_retracted": bool((w or {}).get("is_retracted")),
         "venue_type": venue_type,
         "peer_reviewed": peer_reviewed,
         "citation_velocity": velocity,        # 年均被引(影响力辅助信号)
+        "venue_quality": venue_quality,       # indexed / thin / None(判不准)
         "version_status": p.get("version_status"),  # 来自 dedup 的预印本<->出版归并
     }
 
@@ -220,6 +232,7 @@ def enrich(rec, code_map=None):
         "oaid": None, "refs": [], "tldr": "", "abstract": "",
         "enrich_match_score": None, "enrichment_errors": [],
         "version_status": rec.get("version_status"),  # 来自 dedup(若跑过)
+        "triangulation": rec.get("triangulation"),    # 来自验证门的跨索引一致性
     }
 
     def err(src):
@@ -236,7 +249,7 @@ def enrich(rec, code_map=None):
             err("openalex/id")
     if not w and p["title"]:
         r = get("https://api.openalex.org/works?per-page=1&filter=title.search:" + urllib.parse.quote(p["title"]))
-        cand = (r or {}).get("results", [None])[0] if r else None
+        cand = (((r or {}).get("results") or [None])[0]) if r else None  # results 可能是空 list, 不能用默认值兜
         if r is None:
             err("openalex/title-search")
         if cand:
@@ -365,6 +378,58 @@ def write_ris(papers, path):
         if p["code_repo"] != "none-found":
             out.append("N1  - code: " + p["code_repo"])
         out.append("ER  - ")
+        out.append("")
+    open(path, "w", encoding="utf-8").write("\n".join(out) + "\n")
+
+
+def _split_author(a):
+    """'He, Kaiming' / 'Kaiming He' -> {family, given}; 尽力而为。"""
+    a = a.strip()
+    if "," in a:
+        fam, _, giv = a.partition(",")
+        return {"family": fam.strip(), "given": giv.strip()}
+    parts = a.split()
+    return {"family": parts[-1], "given": " ".join(parts[:-1])} if len(parts) > 1 else {"family": a}
+
+
+_CSL_TYPE = {"inproceedings": "paper-conference", "article": "article-journal", "misc": "article"}
+_ENW_TYPE = {"inproceedings": "Conference Paper", "article": "Journal Article", "misc": "Generic"}
+
+
+def write_csl(papers, path):
+    """CSL-JSON: Zotero / pandoc / citeproc 通用交换格式(比 .nbib 更适合 CS/ML)。"""
+    out = []
+    for p in papers:
+        item = {"id": p["slug"], "type": _CSL_TYPE.get(bibtype(p), "article"),
+                "title": p["title"], "author": [_split_author(a) for a in p["authors"]]}
+        if p["year"]:
+            item["issued"] = {"date-parts": [[int(p["year"])]]}
+        if p["venue"]:
+            item["container-title"] = p["venue"]
+        if p["doi"]:
+            item["DOI"] = p["doi"]; item["URL"] = "https://doi.org/" + p["doi"]
+        elif p["arxiv"]:
+            item["URL"] = "https://arxiv.org/abs/" + p["arxiv"]
+        out.append(item)
+    json.dump(out, open(path, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+
+
+def write_enw(papers, path):
+    """EndNote (.enw): EndNote 原生导入格式。"""
+    out = []
+    for p in papers:
+        out.append("%0 " + _ENW_TYPE.get(bibtype(p), "Generic"))
+        out.append("%T " + p["title"])
+        for a in p["authors"]:
+            out.append("%A " + a)
+        if p["year"]:
+            out.append("%D " + str(p["year"]))
+        if p["venue"]:
+            out.append("%J " + p["venue"])
+        if p["doi"]:
+            out.append("%R " + p["doi"]); out.append("%U https://doi.org/" + p["doi"])
+        elif p["arxiv"]:
+            out.append("%U https://arxiv.org/abs/" + p["arxiv"])
         out.append("")
     open(path, "w", encoding="utf-8").write("\n".join(out) + "\n")
 
@@ -527,6 +592,8 @@ def main():
               open(os.path.join(a.out, "corpus.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     write_bib(papers, os.path.join(a.out, "verified.bib"))
     write_ris(papers, os.path.join(a.out, "verified.ris"))
+    write_csl(papers, os.path.join(a.out, "verified.csl.json"))   # Zotero/pandoc
+    write_enw(papers, os.path.join(a.out, "verified.enw"))        # EndNote
     write_obsidian(papers, edges, os.path.join(a.out, "obsidian"), summaries, taxonomy, seeds)
     # report.md — At a glance + 卡片式; 完整 title/venue 不截断
     by = {p["slug"]: p for p in papers}
@@ -714,12 +781,22 @@ def main():
     # 可信度告警(存在性之外: 撤稿 / 纯预印本未评审)
     retracted = [p for p in papers if (p.get("trust") or {}).get("is_retracted")]
     preprints = [p for p in papers if (p.get("trust") or {}).get("venue_type") == "preprint"]
-    if retracted or preprints:
+    # 跨索引一致性低(三角验证): 仅 1 索引命中而其余源查得正常 -> 存疑
+    single_idx = [p for p in papers if (p.get("triangulation") or {}).get("n_matched", 9) <= 1
+                  and (p.get("triangulation") or {}).get("n_queried_ok", 0) >= 3]
+    thin_venue = [p for p in papers if (p.get("trust") or {}).get("venue_quality") == "thin"]
+    if retracted or preprints or single_idx or thin_venue:
         L += ["", "## 可信度告警（存在性已确认，但选 baseline/判 SOTA 前请留意）"]
         for p in retracted:
             L.append(f"- ⚠ **撤稿** — {p['slug']}：{p['title']}（OpenAlex is_retracted=true；勿作为 baseline）")
         for p in preprints:
             L.append(f"- **纯预印本(未同行评审)** — {p['slug']}：{p['venue'] or 'arXiv'}；引用时注意尚未正式发表")
+        for p in single_idx:
+            tr = p["triangulation"]
+            L.append(f"- **单索引存疑** — {p['slug']}：仅 {tr['n_matched']}/{tr['n_queried_ok']} 个索引命中"
+                     f"（命中: {', '.join(tr.get('matched_indexes') or []) or '—'}）；可能冷门/新预印本，也可能存疑，建议核对原文")
+        for p in thin_venue:
+            L.append(f"- **venue 元数据稀薄** — {p['slug']}：{p['venue'] or '?'}（未见 DOAJ/ISSN 且零被引；非掠夺定性，仅提示留意期刊可信度）")
 
     # 年份审计
     yaudit = [p for p in papers if p.get("input_year") is not None and str(p["input_year"]) != str(p["year"])]

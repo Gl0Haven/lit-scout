@@ -14,3 +14,7 @@ _*.json
 _*.txt
 *.tmp
 .cache/
+
+# PDF 全文抽取的专用虚拟环境(自建, 勿提交; 见 requirements-pdf.txt)
+.venv/
+venv/

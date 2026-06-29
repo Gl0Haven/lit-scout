@@ -24,6 +24,11 @@ min_relevance: 0.6
    > 注意：build_outputs 是全量重写 out 目录，**必须用 `--merge-corpus` 才能累积**；否则每次只剩本窗口的几篇。
    > 交付校验用 `check_outputs.py --mode tracking`（查 digest 段存在）。
 
+**增量、不重复劳动**：本窗口只 scout/verify**新检索到的候选**即可——验证门的持久缓存
+（`verification_cache.py`，TTL 90 天）会让任何与历史重叠的论文跳过联网核验，`--merge-corpus`
+再把历史 confirmed 并回来。所以追踪是天然增量的：每周只为真正的新文付检索/核验成本。
+可把整套挂到 `/schedule` 上自动周更。
+
 ## 产物 digest（report.md 追加）
 ```markdown
 ## 新文 digest — 2026-06-15（自 2026-06-08）

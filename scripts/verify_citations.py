@@ -16,8 +16,12 @@
 
 只用标准库(urllib/json/difflib), 无第三方依赖, Windows 可直接 `python verify_citations.py`.
 """
-import sys, json, re, time, argparse, ssl, urllib.parse, urllib.request
+import sys, os, json, re, time, argparse, ssl, urllib.parse, urllib.request
 from difflib import SequenceMatcher
+
+# 可选 API key/邮箱(融合自 nature-academic-search): 设了就用, 提速/提配额; 不设照常跑(免 key)。
+S2_KEY = os.environ.get("SEMANTIC_SCHOLAR_API_KEY")   # S2: 1req/s -> 高配额
+OA_MAIL = os.environ.get("OPENALEX_EMAIL")            # OpenAlex polite pool, 更稳
 
 
 def _build_ssl_ctx():
@@ -108,8 +112,11 @@ def sim(a, b):
     return r
 
 
-def _get(url):
-    req = urllib.request.Request(url, headers=UA)
+def _get(url, headers=None):
+    h = dict(UA)
+    if headers:
+        h.update(headers)
+    req = urllib.request.Request(url, headers=h)
     with urllib.request.urlopen(req, timeout=TIMEOUT, context=CTX) as r:
         return r.read().decode("utf-8", "replace")
 
@@ -181,6 +188,8 @@ def openalex_by_title(title, year=None):
     """OpenAlex 兜底: 覆盖 CrossRef/arXiv 都没有但 OpenAlex 收录的论文(补 recall)。"""
     try:
         url = "https://api.openalex.org/works?per-page=5&filter=title.search:" + urllib.parse.quote(title)
+        if OA_MAIL:
+            url += "&mailto=" + urllib.parse.quote(OA_MAIL)
         res = json.loads(_get(url)).get("results", [])
         best = None
         for w in res:
@@ -238,7 +247,7 @@ def s2_by_title(title, year=None):
     try:
         url = ("https://api.semanticscholar.org/graph/v1/paper/search?limit=5&fields=title,year,externalIds&query="
                + urllib.parse.quote(title))
-        data = json.loads(_get(url)).get("data", [])
+        data = json.loads(_get(url, {"x-api-key": S2_KEY} if S2_KEY else None)).get("data", [])
         best = None
         for p in data:
             t = p.get("title") or ""
@@ -262,25 +271,47 @@ def s2_by_title(title, year=None):
         return None
 
 
+TITLE_SOURCES = 5   # crossref/arxiv/openalex/dblp/s2; 用于三角验证算覆盖率
+
+
 def title_candidates(title, year=None):
-    return [r for r in (crossref_by_title(title, year),
-                        arxiv_lookup(title=title),
-                        openalex_by_title(title, year),
-                        dblp_by_title(title, year),
-                        s2_by_title(title, year)) if r]
+    """返回 [(source_name, (kind,id,match_title,score,year)), ...]，带来源标签供三角验证。"""
+    raw = [("crossref", crossref_by_title(title, year)),
+           ("arxiv", arxiv_lookup(title=title)),
+           ("openalex", openalex_by_title(title, year)),
+           ("dblp", dblp_by_title(title, year)),
+           ("s2", s2_by_title(title, year))]
+    return [(src, r) for src, r in raw if r]
 
 
-def classify_title_candidates(c, cands):
-    if not cands:
+def _triangulation(pairs):
+    """跨索引一致性(取自 ARS 的污染三角验证, 此处为 advisory): 一个标题在越多独立索引命中,
+    越可信; 只在 1 个索引命中而其余源查得好好的却找不到相近论文 -> 疑似冷门或存疑。
+    纯附加信号, 不改变 tier 判定(不冤杀真实但冷门的论文)。"""
+    matched = sorted({src for src, t in pairs if t[3] >= REVIEW_LOW})
+    errored = {e["source"].split("/")[0] for e in QUERY_ERRORS}
+    # 名称对齐: query_error 里 'semanticscholar' 对应源名 's2'
+    errored = {"s2" if s == "semanticscholar" else s for s in errored}
+    n_ok = max(TITLE_SOURCES - len(errored), len(matched))
+    return {"matched_indexes": matched, "n_matched": len(matched), "n_queried_ok": n_ok}
+
+
+def classify_title_candidates(c, pairs):
+    """pairs: [(source_name, (kind,id,match_title,score,year)), ...]。tier 判定与历史一致,
+    仅附加 triangulation 跨索引一致性信号与单索引存疑告警。"""
+    if not pairs:
         if QUERY_ERRORS:
             return "review", {"reason": "检索无命中或查询失败, 需复核后再判定",
                               "query_errors": QUERY_ERRORS[:5],
                               "note": "查询源异常时不可当作不存在删除"}
         return "rejected", {"reason": "检索无命中 (疑似不存在或检索失败)"}
-    cands.sort(key=lambda x: -x[3])
+    pairs = sorted(pairs, key=lambda x: -x[1][3])
+    cands = [t for _, t in pairs]
     best = cands[0]
     key = "resolved_" + best[0]  # resolved_doi / resolved_arxiv / resolved_openalex / resolved_dblp / resolved_s2
-    info = {key: best[1], "match_title": best[2], "score": round(best[3], 3), "source": best[0]}
+    tri = _triangulation(pairs)
+    info = {key: best[1], "match_title": best[2], "score": round(best[3], 3),
+            "source": best[0], "resolved_via": pairs[0][0], "triangulation": tri}
     add_year_info(info, c, best[4] if len(best) > 4 else None)
     # year_sources: 各源给出的年份, 暴露多源年份分歧供审计
     ys = sorted({a[4] for a in cands if len(a) > 4 and a[4]})
@@ -291,14 +322,18 @@ def classify_title_candidates(c, cands):
             for a in cands[1:] if best[3] - a[3] < 0.1]
     if alts:
         info["alternatives"] = alts  # 近分备选, 供人工消歧
+    # 单索引存疑告警(advisory, 不改 tier): 仅 1 源命中而 ≥3 源查得正常却没找到相近论文
+    if tri["n_matched"] <= 1 and tri["n_queried_ok"] >= 3:
+        append_note(info, f"⚠ 仅 {tri['n_matched']}/{tri['n_queried_ok']} 个索引命中该标题, "
+                          "其余源未找到相近论文; 可能是冷门/新预印本, 也可能存疑, 建议人工核对原文")
     if best[3] >= THRESHOLD:
         use_match_title(info)
         return "confirmed", info
     if best[3] >= REVIEW_LOW:
-        info["note"] = "相似度处于待确认区间, 请人工确认是否同一篇(勿静默丢弃)"
+        append_note(info, "相似度处于待确认区间, 请人工确认是否同一篇(勿静默丢弃)")
         return "review", info
     if QUERY_ERRORS and best[3] >= HARD_REJECT_LOW:
-        info["note"] = "最佳匹配相似度过低, 但部分查询源失败; 需复核后再判定"
+        append_note(info, "最佳匹配相似度过低, 但部分查询源失败; 需复核后再判定")
         info["query_errors"] = QUERY_ERRORS[:5]
         return "review", info
     return "rejected", {"reason": f"最佳匹配相似度过低 (score={best[3]:.2f}): 查回='{best[2]}'"}

@@ -1,0 +1,14 @@
+# 可选：PDF 全文抽取依赖（仅 scripts/fetch_fulltext.py 用）。
+# 核心脚本（验证门/去重/产物/校验）仍是零依赖，不需要装这些。
+#
+# 建专用 venv 后装在里面，别污染系统 python：
+#   python -m venv .venv
+#   .venv/Scripts/python -m pip install -r requirements-pdf.txt   # Windows
+#   .venv/bin/python    -m pip install -r requirements-pdf.txt    # *nix
+# 然后让 fetch_fulltext.py 用该 venv 的 python 运行；未装则自动回退到摘要。
+
+pymupdf>=1.24        # fitz: C 内核 MuPDF, 最快、文本质量高, 主力
+pymupdf4llm>=0.0.17  # PyMuPDF 直出干净 markdown, 喂 LLM/总结/claim 核对
+pdfplumber>=0.11     # 表格/版面坐标抽取, 抠 SOTA 表的兜底
+# 可选更高质量档(版面/公式更强, 但更重)，需要再装：
+# docling>=2.0

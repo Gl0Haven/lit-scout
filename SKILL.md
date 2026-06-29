@@ -63,11 +63,13 @@ description: >-
 - `faithfulness_agent` —（可选深度）对高风险断言(SOTA 指标值/"A改进B")回原文做 claim-faithfulness 二次核对，撤下不被支持的
 - `survey_writer_agent` —（可选）把 confirmed 语料写成可直接进综述/论文的 Related Work 段落（投稿体，只引 verified.bib），产出 `survey-draft.md`
 
-**确定性验证门**：`scripts/verify_citations.py`。吃候选 JSON，调 CrossRef + arXiv + OpenAlex + DBLP + Semantic Scholar 五源逐条核验（多源提 recall；标题含副标题也判同篇），输出三档 confirmed/review/rejected。用 `python` 运行（部分 Windows 上 `python3` 是微软商店占位别名）；脚本内置 SSL 上下文(truststore→certifi→默认)，避免精简环境下 arXiv 等 HTTPS 源报 CERTIFICATE_VERIFY_FAILED。**带持久验证缓存**（`verification_cache.py`，SQLite，默认 `~/.cache/lit-scout`，TTL 90 天）：同一篇跨运行只核验一次；只缓存稳定判定，网络失败的 fail-safe review 绝不缓存；`--no-cache` 可关。回归靠 `evals/run_gold.py`（已知真/假引用 gold set，保证 confirmed 0 编造、rejected 0 错杀真论文）。
+**确定性验证门**：`scripts/verify_citations.py`。吃候选 JSON，调 CrossRef + arXiv + OpenAlex + DBLP + Semantic Scholar 五源逐条核验（多源提 recall；标题含副标题也判同篇），输出三档 confirmed/review/rejected。用 `python` 运行（部分 Windows 上 `python3` 是微软商店占位别名）；脚本内置 SSL 上下文(truststore→certifi→默认)，避免精简环境下 arXiv 等 HTTPS 源报 CERTIFICATE_VERIFY_FAILED。**带持久验证缓存**（`verification_cache.py`，SQLite，默认 `~/.cache/lit-scout`，TTL 90 天）：同一篇跨运行只核验一次；只缓存稳定判定，网络失败的 fail-safe review 绝不缓存；`--no-cache` 可关。回归靠 `evals/run_gold.py`（已知真/假引用 gold set，保证 confirmed 0 编造、rejected 0 错杀真论文）。**跨索引三角验证**：记录每个标题命中了 CrossRef/arXiv/OpenAlex/DBLP/S2 中几个索引(`triangulation` 字段)，只在 1 个索引命中而其余源查得正常却找不到 → 报"单索引存疑"(advisory，不自动降级)。**可选 API-key/邮箱**(`SEMANTIC_SCHOLAR_API_KEY`/`OPENALEX_EMAIL` 环境变量，设了提速提配额，不设照常免 key 跑)。批量前可先 `python scripts/preflight.py` 自检源连通性。
+
+**全文与 claim 核对**(0 幻觉脊柱的深化，可选)：`scripts/fetch_fulltext.py` 抓开放获取 PDF 抽全文 markdown(PyMuPDF/pymupdf4llm，装在专用 venv 见 `requirements-pdf.txt`；抓不到回退摘要)；`scripts/check_claims.py` 在全文里**机械定位** SOTA 指标值/关系断言的证据(metric 给 supported/mismatch/not-found，relation 给候选证据句)，由 `faithfulness_agent` 据此判定并撤下不被支持的断言。把"引用存在"推进到"论断也对得上"。
 
 **去重门**：`scripts/dedup.py`（scout 之后、verify 之前过一遍）。DOI 主键 + (标题 Jaccard≥0.90 且第一作者姓氏) 兜底 + **预印本↔出版版本归并**（保留 DOI 与 arxiv id，标 `version_status`）。多源 scatter-gather 必有跨源重复，纯标题归一化漏得厉害、会污染引用图与 SOTA 计数。
 
-**Trust 可信度层**（存在性之外，`build_outputs.py` 自动算）：撤稿(OpenAlex `is_retracted`) / 评审层(preprint/workshop/conference/journal) / 引用热度(年均被引) / 版本状态。report 出「可信度告警」（撤稿禁作 baseline、纯预印本未评审提示），`.bib` 给撤稿条目加 RETRACTED note，Obsidian frontmatter 带 `venue_type/peer_reviewed/retracted` 供 Dataview 查询。**存在性 ≠ 可信度**：confirmed 只代表"真实存在"，选 baseline/判 SOTA 前看 trust。
+**Trust 可信度层**（存在性之外，`build_outputs.py` 自动算）：撤稿(OpenAlex `is_retracted`) / 评审层(preprint/workshop/conference/journal) / 引用热度(年均被引) / 版本状态 / 期刊质量软信号(`venue_quality`：journal 但无 DOAJ/ISSN 且零被引→标"元数据稀薄"，保守不下掠夺定性)。report 出「可信度告警」（撤稿禁作 baseline、纯预印本未评审提示），`.bib` 给撤稿条目加 RETRACTED note，Obsidian frontmatter 带 `venue_type/peer_reviewed/retracted` 供 Dataview 查询。**存在性 ≠ 可信度**：confirmed 只代表"真实存在"，选 baseline/判 SOTA 前看 trust。
 
 **产物落盘（单一 canonical 数据流）**：
 ```
@@ -78,7 +80,7 @@ build_outputs.py --verdict verdict.json --out <dir> \
   [--positioning positioning.json] [--circles circles.json] [--merge-corpus prev/corpus.json]
 ```
 模式专属输入：`--positioning`(模式①: 最近邻/gap/baseline/必引/RW骨架) · `--circles`(模式④: 核心/邻近/外围三圈) · `--merge-corpus`(模式③累积: 并入上次 corpus 不丢历史，report 出「本次新增 digest」) · `--search-log`(生成 search-strategy.md 检索可复现报告)。
-生成 `corpus.json`(canonical 记录) → 由它统一派生 `report.md`、`verified.bib`、`verified.ris`(Zotero/EndNote)、`needs-review.md`、`rejected.md`、`obsidian/`。身份(id/title/year)取自验证门，富化只补不覆盖；摘要按 OpenAlex→CrossRef→arXiv 兜底抓取(缺则标"摘要不可得")；citekey 转 ASCII、作者 ` and ` 分隔、空档也生成空态文件。输入侧 taxonomy/sota/seeds/code/overrides 缺省时报告明示"未提供"，不降级。`--overrides` 按 slug→doi→arxiv→id 命中，`bibtype` 只改导出类型不动源 `work_type`。
+生成 `corpus.json`(canonical 记录) → 由它统一派生 `report.md`、`verified.bib`、`verified.ris`、`verified.csl.json`(Zotero/pandoc)、`verified.enw`(EndNote)、`needs-review.md`、`rejected.md`、`obsidian/`。身份(id/title/year)取自验证门，富化只补不覆盖；摘要按 OpenAlex→CrossRef→arXiv 兜底抓取(缺则标"摘要不可得")；citekey 转 ASCII、作者 ` and ` 分隔、空档也生成空态文件。输入侧 taxonomy/sota/seeds/code/overrides 缺省时报告明示"未提供"，不降级。`--overrides` 按 slug→doi→arxiv→id 命中，`bibtype` 只改导出类型不动源 `work_type`。
 **论文总结**：由 agent(extractor/positioning) **基于抓取到的真实摘要/全文**逐篇写总结，存 `summaries.json`(slug→中文总结)，经 `--summaries` 注入 report 的"论文总结"段；摘要不可得的篇目须如实标注、不编造。
 **交付前必跑校验门**：`scripts/check_outputs.py --verdict verdict.json --out <dir> [--mode landscape|positioning|seed|tracking]`，校验三档计数一致、year 无漂移、citekey ASCII、标题不截断、引用边不冒充谱系、撤稿已显式告警、trust 字段齐备等；`--mode` 额外校验该模式招牌产物（landscape 查 Taxonomy/SOTA/种子；positioning 查定位章节+slug 属 confirmed；seed 查同心圆；tracking 查 digest）；非 0 退出即不得交付。
 **输出人设（去 AI 味）**（见 `references/voice.md`）：报告里的散文（总结/gap/定位/流派思路/Related Work）由 agent 写，统一走"同领域资深同门"人设 + 两种语域（**笔记体**默认进 report.md；**投稿体**可选进 `survey-draft.md`，能直接粘进综述/论文，只引 verified.bib 的 citekey）。写散文前 agent 先读 voice.md；风格只改"怎么说"，事实仍守 0 幻觉。`scripts/check_voice.py` 扫 AI 套话（WARN）并硬校验 survey 草稿的行内引用（`\cite{}` 或 `[citekey]` 两种格式，跳过代码块内的格式说明）必须命中 verified.bib（未核引用即 FAIL）；check_outputs 末尾自动调它。

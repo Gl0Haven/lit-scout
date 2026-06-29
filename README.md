@@ -38,20 +38,23 @@ python scripts/verify_citations.py --in cand.json --threshold 0.92 --sleep 0.5 >
 ```
 
 ## 产物
-默认落 `lit-scout-out/<topic>/`：`report.md`、`verified.bib`/`verified.ris`（仅 confirmed，带真实 DOI + 代码链接）、`needs-review.md`、`rejected.md`、`obsidian/`；可选 `search-strategy.md`（检索可复现报告，`--search-log`）与 `survey-draft.md`（投稿体综述草稿，survey_writer_agent 产，只引 verified.bib）。Obsidian 用 `cites::`/`cited-by::` wikilink 渲染**集合内引用图**(有原文 evidence 才升级 `improves::` 方法谱系)，MOC 按 taxonomy 分组；见 `references/export-zotero-obsidian.md`。
+默认落 `lit-scout-out/<topic>/`：`report.md`、`verified.bib`/`verified.ris`/`verified.csl.json`/`verified.enw`（仅 confirmed，带真实 DOI + 代码链接；覆盖 BibTeX/Zotero/pandoc/EndNote）、`needs-review.md`、`rejected.md`、`obsidian/`；可选 `search-strategy.md`（检索可复现报告，`--search-log`）与 `survey-draft.md`（投稿体综述草稿，survey_writer_agent 产，只引 verified.bib）。Obsidian 用 `cites::`/`cited-by::` wikilink 渲染**集合内引用图**(有原文 evidence 才升级 `improves::` 方法谱系)，MOC 按 taxonomy 分组；见 `references/export-zotero-obsidian.md`。
 
 ## 目录
 ```
 lit-scout/
 ├── SKILL.md                 # 模式路由 + 0幻觉铁律 + 共享底座
 ├── scripts/
-│   ├── verify_citations.py  # 确定性多源验证门 (输出 verdict.json 三档) + 持久缓存
+│   ├── verify_citations.py  # 确定性多源验证门 (三档 + 持久缓存 + 跨索引三角验证 + 可选API-key)
 │   ├── verification_cache.py# SQLite 验证缓存 (跨运行只验一次, TTL 90 天)
 │   ├── dedup.py             # 候选去重 (DOI主键 + 标题作者兜底 + 预印本↔出版归并)
 │   ├── parse_refs.py        # 模式⑤: .bib/.ris/.tex/.txt 参考文献 → 候选 JSON
-│   ├── build_outputs.py     # 单一 canonical 数据流导出 (verdict → corpus → bib/report/obsidian) + trust层
+│   ├── preflight.py         # 批量前连通性自检 (源可达性 + key 状态)
+│   ├── fetch_fulltext.py    # 抓开放获取 PDF 抽全文 markdown (PyMuPDF, 需 PDF venv)
+│   ├── check_claims.py      # claim 层证据定位 (SOTA 数字/关系断言, 配 faithfulness_agent)
+│   ├── build_outputs.py     # 单一 canonical 数据流导出 (verdict → corpus → bib/ris/csl/enw/report/obsidian) + trust层
 │   ├── check_outputs.py     # 输出一致性校验门 (交付前必跑, 支持 --mode)
-│   └── check_voice.py       # 去 AI 味扫描(WARN) + survey 草稿 \cite 硬校验
+│   └── check_voice.py       # 去 AI 味扫描(WARN) + survey 引用硬校验(\cite{}/[citekey])
 ├── references/              # 各模式流程 + 检索源 + 输出/OS 规则
 ├── agents/                  # 各 agent prompt（按模式调度）
 ├── assets/                  # watchlist 等模板
@@ -60,10 +63,13 @@ lit-scout/
 │   ├── gold-citations.json  # 验证门回归 gold set (已知真/假引用)
 │   └── run_gold.py          # 跑 gold set, 报混淆矩阵 + 校验 0幻觉不变量
 ├── requirements.txt         # 可选 truststore/certifi (HTTPS 证书)
+├── requirements-pdf.txt     # 可选 PDF 全文抽取 (PyMuPDF/pymupdf4llm/pdfplumber, 装进 .venv)
 └── LICENSE                  # MIT
 ```
 
-可信度层(Trust)：confirmed 只代表"真实存在"，build_outputs 另算 **撤稿/评审层(preprint/conference/journal)/引用热度/版本状态**，report 出「可信度告警」，撤稿条目禁作 baseline。**存在性 ≠ 可信度**。
+可信度层(Trust)：confirmed 只代表"真实存在"，build_outputs 另算 **撤稿/评审层(preprint/conference/journal)/引用热度/版本状态/期刊质量软信号**，并结合验证门的**跨索引三角验证**，report 出「可信度告警」(撤稿禁作 baseline、纯预印本、单索引存疑、venue 元数据稀薄)。**存在性 ≠ 可信度**。
+
+全文与 claim 核对(可选，0 幻觉脊柱的深化)：`fetch_fulltext.py` 抓开放获取 PDF 抽全文 → `check_claims.py` 在全文里机械定位 SOTA 指标值/关系断言的证据 → `faithfulness_agent` 判定并撤下不被支持的论断。把"引用存在"推进到"论断也对得上"。需 PDF venv（`requirements-pdf.txt`），抓不到自动回退摘要。
 
 输出人设(去 AI 味)：报告散文走"同领域资深同门"人设（与进门 `intake.md` 同一人设），两种语域——**笔记体**(默认 report.md，给自己看)与**投稿体**(可选 `survey-draft.md`，能直接进综述/论文，只引 verified.bib)。规范见 `references/voice.md`；`check_voice.py` 扫 AI 套话(WARN) + 硬校验 survey 行内引用(`\cite{}` 或 `[citekey]`，跳过代码块内的格式说明)必须命中 verified.bib。
 

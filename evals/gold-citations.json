@@ -9,13 +9,27 @@
     {"title": "Adam: A Method for Stochastic Optimization", "year": 2015, "arxiv": "1412.6980"},
     {"title": "U-Net: Convolutional Networks for Biomedical Image Segmentation", "year": 2015, "arxiv": "1505.04597"},
     {"title": "Denoising Diffusion Probabilistic Models", "year": 2020, "arxiv": "2006.11239"},
-    {"title": "Segment Anything", "year": 2023, "arxiv": "2304.02643"}
+    {"title": "Segment Anything", "year": 2023, "arxiv": "2304.02643"},
+    {"title": "Faster R-CNN: Towards Real-Time Object Detection with Region Proposal Networks", "year": 2015, "arxiv": "1506.01497"},
+    {"title": "Mask R-CNN", "year": 2017, "arxiv": "1703.06870"},
+    {"title": "Language Models are Few-Shot Learners", "year": 2020, "arxiv": "2005.14165"},
+    {"title": "Batch Normalization: Accelerating Deep Network Training by Reducing Internal Covariate Shift", "year": 2015, "arxiv": "1502.03167"},
+    {"title": "Auto-Encoding Variational Bayes", "year": 2013, "arxiv": "1312.6114"},
+    {"title": "Distilling the Knowledge in a Neural Network", "year": 2015, "arxiv": "1503.02531"},
+    {"title": "Neural Machine Translation by Jointly Learning to Align and Translate", "year": 2014, "arxiv": "1409.0473"},
+    {"title": "YOLOv3: An Incremental Improvement", "year": 2018, "arxiv": "1804.02767"},
+    {"title": "Highly accurate protein structure prediction with AlphaFold", "year": 2021, "doi": "10.1038/s41586-021-03819-2"}
   ],
   "fake": [
     {"title": "Quantum Holographic Transformers for Telepathic Image Synthesis", "year": 2023},
     {"title": "Self-Supervised Chrono-Diffusion Networks for Retrocausal Video Prediction", "year": 2022},
     {"title": "HyperGraph Capsule Manifolds for Zero-Shot Olfactory Recognition", "year": 2021},
     {"title": "Federated Spiking Wavelet Attention for Subdermal Biometric Forgery Detection", "year": 2024},
-    {"title": "Neural Tensor Origami: Foldable Latent Spaces for Tactile Style Transfer", "year": 2020}
+    {"title": "Neural Tensor Origami: Foldable Latent Spaces for Tactile Style Transfer", "year": 2020},
+    {"title": "Recursive Spectral Hashing for Privacy-Preserving Neuromorphic Retrieval", "year": 2022},
+    {"title": "Adversarial Manifold Distillation for Cross-Modal Quantum Embeddings", "year": 2023},
+    {"title": "Hierarchical Bayesian Optical Flow on Non-Euclidean Event Streams", "year": 2021},
+    {"title": "Self-Healing Graph Transformers for Causal Tactile Inpainting", "year": 2024},
+    {"title": "Differentiable Holomorphic Attention for Few-Shot Seismic Forgery Detection", "year": 2022}
   ]
 }
